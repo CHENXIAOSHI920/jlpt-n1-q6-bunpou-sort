@@ -37,7 +37,7 @@ https://你的用户名.github.io/仓库名/demo/
 cd "更新包解压文件目录"
 git init
 git add .
-git commit -m "Release JLPT N1 problem 6 v13"
+git commit -m "Release JLPT N1 problem 6 v14"
 git branch -M main
 git remote add origin https://github.com/你的用户名/你的仓库名.git
 git push -u origin main

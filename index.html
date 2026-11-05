@@ -1849,6 +1849,55 @@
       color: var(--color-white);
     }
 
+    .index-module-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      margin-bottom: 9px;
+      padding: 4px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: rgba(255, 253, 248, 0.7);
+    }
+
+    .index-module-tab {
+      min-width: 0;
+      min-height: 32px;
+      padding: 0 5px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--color-ink-soft);
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .index-module-tab:hover {
+      color: var(--color-accent);
+    }
+
+    .index-module-tab.is-active {
+      background: var(--color-accent);
+      color: var(--color-white);
+      box-shadow: inset 0 0 0 1px var(--color-accent-deep);
+    }
+
+    .index-module-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px 10px;
+      margin: 0 0 10px;
+      color: var(--color-ink-faint);
+      font-size: 8px;
+      line-height: 1.5;
+    }
+
+    .index-module-summary strong {
+      color: var(--color-ink-soft);
+      font-weight: 700;
+    }
+
     .index-empty {
       margin: 9px 0 0;
       color: var(--color-ink-faint);
@@ -17660,8 +17709,11 @@ const moduleMeta = {
 const state = {
   currentIndex: 0,
   module: "sort",
+  indexModule: "sort",
   searchQuery: "",
   statuses: {},
+  examStatuses: {},
+  mathStatuses: {},
   sortSessions: {},
   examSessions: {},
   mathSessions: {},
@@ -17719,6 +17771,22 @@ function optionById(question, id) {
   return question.options.find((option) => option.id === id);
 }
 
+const INDEX_MODULES = {
+  sort: { label: "排序", statuses: () => state.statuses },
+  exam: { label: "真题", statuses: () => state.examStatuses },
+  math: { label: "数学题", statuses: () => state.mathStatuses }
+};
+
+function statusFor(module, id) {
+  return INDEX_MODULES[module]?.statuses()[id] ?? null;
+}
+
+function statusMapForSource(source) {
+  if (source === "exam") return state.examStatuses;
+  if (source === "math") return state.mathStatuses;
+  return state.statuses;
+}
+
 function loadStatuses() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -17728,6 +17796,16 @@ function loadStatuses() {
           ?? (question.session === "2026.7" ? saved.statuses[question.number] : null);
         if (result === "correct" || result === "wrong") {
           state.statuses[question.id] = result;
+        }
+      }
+      for (const moduleName of ["exam", "math"]) {
+        const savedMap = saved[`${moduleName}Statuses`];
+        if (!savedMap || typeof savedMap !== "object") continue;
+        for (const question of questions) {
+          const result = savedMap[question.id];
+          if (result === "correct" || result === "wrong") {
+            state[`${moduleName}Statuses`][question.id] = result;
+          }
         }
       }
       return;
@@ -17751,26 +17829,26 @@ function loadStatuses() {
     saveStatuses();
   } catch {
     state.statuses = {};
+    state.examStatuses = {};
+    state.mathStatuses = {};
   }
 }
 
 function saveStatuses() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ statuses: state.statuses }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      statuses: state.statuses,
+      examStatuses: state.examStatuses,
+      mathStatuses: state.mathStatuses
+    }));
   } catch {
     // The exercise remains usable when local storage is unavailable.
   }
 }
 
 function setLatestResult(id, result, source) {
-  state.statuses[id] = result;
-  if (source !== "sort" && state.sortSessions[id]) {
-    state.sortSessions[id].latestResult = result;
-    state.sortSessions[id].displayResult = null;
-  }
-  if (source !== "exam") {
-    delete state.examSessions[id];
-  }
+  const target = statusMapForSource(source);
+  target[id] = result;
   saveStatuses();
   renderSidebar();
 }
@@ -17801,7 +17879,11 @@ function getSortSession(id) {
 
 function getExamSession(id) {
   if (!state.examSessions[id]) {
-    state.examSessions[id] = { choice: null, latestResult: null, revealed: false };
+    state.examSessions[id] = {
+      choice: null,
+      latestResult: state.examStatuses[id] || null,
+      revealed: false
+    };
   }
   return state.examSessions[id];
 }
@@ -19142,6 +19224,7 @@ function mathPrimaryAction() {
       ?? mathStarSnapshot(question, session).percent;
     session.showVerdict = true;
     session.status = session.won ? "收网成功！" : "收网结束。";
+    setLatestResult(question.id, session.won ? "correct" : "wrong", "math");
     renderMath();
     return;
   }
@@ -19316,6 +19399,11 @@ function searchableText(question) {
 function renderSidebar() {
   const query = state.searchQuery.trim().toLowerCase();
   const matches = questions.filter((question) => !query || searchableText(question).includes(query));
+  const activeModule = INDEX_MODULES[state.indexModule] || INDEX_MODULES.sort;
+  const statusMap = activeModule.statuses();
+  const correctCount = questions.filter((question) => statusMap[question.id] === "correct").length;
+  const wrongCount = questions.filter((question) => statusMap[question.id] === "wrong").length;
+  const unansweredCount = questions.length - correctCount - wrongCount;
   const groups = [];
   for (const question of matches) {
     let group = groups.find((item) => item.session === question.session);
@@ -19326,6 +19414,22 @@ function renderSidebar() {
     group.questions.push(question);
   }
   elements.questionIndex.innerHTML = `
+    <nav class="index-module-tabs" aria-label="索引状态模块">
+      ${Object.entries(INDEX_MODULES).map(([moduleName, config]) => `
+        <button
+          class="index-module-tab${state.indexModule === moduleName ? " is-active" : ""}"
+          type="button"
+          data-index-module="${moduleName}"
+          aria-pressed="${state.indexModule === moduleName}"
+        >${config.label}</button>
+      `).join("")}
+    </nav>
+    <p class="index-module-summary">
+      <span><strong>${activeModule.label}</strong></span>
+      <span>正确 ${correctCount}</span>
+      <span>错误 ${wrongCount}</span>
+      <span>未做 ${unansweredCount}</span>
+    </p>
     ${groups.map((group) => `
       <section class="index-group" aria-label="${group.session}">
         <div class="index-group-head">
@@ -19336,14 +19440,18 @@ function renderSidebar() {
           ${group.questions.map((question) => {
             const index = getQuestionIndexById(question.id);
             const isCurrent = index === state.currentIndex;
-            const status = state.statuses[question.id];
+            const status = statusMap[question.id];
             const classes = [
               "index-button",
               status === "wrong" ? "is-wrong" : "",
               status === "correct" ? "is-correct" : "",
               isCurrent ? "is-current" : ""
             ].filter(Boolean).join(" ");
-            const statusLabel = status === "correct" ? "，最近一次正确" : status === "wrong" ? "，最近一次错误" : "";
+            const statusLabel = status === "correct"
+              ? `，${activeModule.label}最近一次正确`
+              : status === "wrong"
+                ? `，${activeModule.label}最近一次错误`
+                : `，${activeModule.label}尚未作答`;
             return `
               <button class="${classes}" type="button" data-question-index="${index}"
                 aria-label="${question.session}第${question.number}题${isCurrent ? "，当前题" : ""}${statusLabel}"
@@ -19356,8 +19464,8 @@ function renderSidebar() {
     ${matches.length === 0 ? '<p class="index-empty">没有匹配的题目</p>' : ""}
     <div class="index-legend" aria-label="状态说明">
       <span class="legend-item"><i class="legend-dot current"></i>当前</span>
-      <span class="legend-item"><i class="legend-dot solved"></i>最近正确</span>
-      <span class="legend-item"><i class="legend-dot wrong"></i>最近错误</span>
+      <span class="legend-item"><i class="legend-dot solved"></i>${activeModule.label}正确</span>
+      <span class="legend-item"><i class="legend-dot wrong"></i>${activeModule.label}错误</span>
     </div>
   `;
 }
@@ -19713,6 +19821,7 @@ function openModule(module) {
     getMathSession(currentQuestion().id).showVerdict = false;
   }
   state.module = module;
+  if (module in INDEX_MODULES) state.indexModule = module;
   render();
 }
 
@@ -19847,6 +19956,12 @@ elements.moduleTabs.addEventListener("click", (event) => {
 });
 
 elements.questionIndex.addEventListener("click", (event) => {
+  const moduleButton = event.target.closest("[data-index-module]");
+  if (moduleButton && INDEX_MODULES[moduleButton.dataset.indexModule]) {
+    state.indexModule = moduleButton.dataset.indexModule;
+    renderSidebar();
+    return;
+  }
   const button = event.target.closest("[data-question-index]");
   if (button) selectQuestion(Number(button.dataset.questionIndex));
 });
