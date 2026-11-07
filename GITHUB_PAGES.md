@@ -8,7 +8,6 @@
 2. 进入仓库，点击 `Add file` → `Upload files`。
 3. 上传：
    - `index.html`
-   - `demo/` 文件夹
    - `README.md`
    - `GITHUB_PAGES.md`
    - `RELEASE_NOTES.md`
@@ -21,12 +20,6 @@
 
 ```text
 https://你的用户名.github.io/仓库名/
-```
-
-五题体验版地址：
-
-```text
-https://你的用户名.github.io/仓库名/demo/
 ```
 
 ## 命令行上传
@@ -48,7 +41,7 @@ git push -u origin main
 ## 后续更新
 
 - 正式版更新：替换根目录的 `index.html`。
-- 体验版更新：替换 `demo/index.html`。
+- 五题体验版已独立维护，不再从正式版仓库更新。
 - 本项目没有 Service Worker，因此不需要同步升级缓存文件名。
 - 如果浏览器仍显示旧页面，强制刷新一次即可。
 
