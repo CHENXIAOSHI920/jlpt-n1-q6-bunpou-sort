@@ -4459,12 +4459,18 @@ function renderEvidence() {
   `;
 }
 
-const MATH_POSITIONS = [
-  { index: 0, label: "第1空" },
-  { index: 1, label: "第2空" },
-  { index: 2, label: "★第3空" },
-  { index: 3, label: "第4空" }
-];
+const MATH_POSITION_INDEXES = [0, 1, 2, 3];
+
+function mathPositions(question) {
+  return MATH_POSITION_INDEXES.map((index) => ({
+    index,
+    label: `${index === question.starSlot ? "★" : ""}第${index + 1}空`
+  }));
+}
+
+function mathPositionLabel(question, index) {
+  return mathPositions(question)[index].label;
+}
 
 const MATH_CLUES = {
   36: [
@@ -4549,9 +4555,9 @@ const MATH_PERMUTATIONS = mathPermutations([1, 2, 3, 4]);
 
 function createMathSession() {
   return {
-    manualBlocked: MATH_POSITIONS.map(() => new Set()),
-    selected: MATH_POSITIONS.map(() => null),
-    assigned: MATH_POSITIONS.map(() => null),
+    manualBlocked: MATH_POSITION_INDEXES.map(() => new Set()),
+    selected: MATH_POSITION_INDEXES.map(() => null),
+    assigned: MATH_POSITION_INDEXES.map(() => null),
     constraints: [],
     clueStep: 0,
     finished: false,
@@ -4658,7 +4664,7 @@ function mathOptionProbability(question, session, optionId) {
 }
 
 function renderMathInlineSlots(question, session) {
-  return MATH_POSITIONS.map((position) => {
+  return mathPositions(question).map((position) => {
     const assignedId = session.assigned[position.index];
     const candidates = assignedId === null
       ? mathAvailableIds(question, session, position.index)
@@ -4679,9 +4685,10 @@ function renderMathInlineSlots(question, session) {
 }
 
 function renderMathMatrix(question, session) {
+  const positions = mathPositions(question);
   const header = `
     <div class="math-matrix-head">选项内容</div>
-    ${MATH_POSITIONS.map((position) => `
+    ${positions.map((position) => `
       <div class="math-matrix-head${position.index === question.starSlot ? " is-star" : ""}">
         ${position.label}
       </div>
@@ -4691,7 +4698,7 @@ function renderMathMatrix(question, session) {
     const label = `
       <div class="math-matrix-option"><b>${option.id}</b><span>${escapeHtml(option.text)}</span></div>
     `;
-    const cells = MATH_POSITIONS.map((position) => {
+    const cells = positions.map((position) => {
       const candidateState = mathCandidateState(question, session, position.index, option.id);
       const selected = session.selected[position.index] === option.id;
       const classes = [
@@ -4720,7 +4727,7 @@ function renderMathMatrix(question, session) {
   }).join("");
   const bottom = `
     <div class="math-matrix-bottom">指认</div>
-    ${MATH_POSITIONS.map((position) => {
+    ${positions.map((position) => {
       const assignedId = session.assigned[position.index];
       const selectedId = session.selected[position.index];
       return `
@@ -4739,7 +4746,7 @@ function renderMathMatrix(question, session) {
 
 function renderMathMobileBoard(question, session) {
   return `<div class="math-mobile-board" aria-label="触屏候选选择">${
-    MATH_POSITIONS.map((position) => {
+    mathPositions(question).map((position) => {
       const assignedId = session.assigned[position.index];
       const selectedId = session.selected[position.index];
       const candidateCount = assignedId === null
@@ -4976,7 +4983,7 @@ function mathSelectNumber(position, optionId) {
   session.selected[position] = session.selected[position] === optionId ? null : optionId;
   session.status = session.selected[position] === null
     ? "已取消选择。"
-    : `${MATH_POSITIONS[position].label}选中 ${optionId}号，点击“就它了”确认。`;
+    : `${mathPositionLabel(question, position)}选中 ${optionId}号，点击“就它了”确认。`;
   session.showVerdict = false;
   renderMath();
 }
@@ -4990,7 +4997,7 @@ function mathToggleBlock(position, optionId) {
   const blocked = session.manualBlocked[position];
   if (blocked.has(optionId)) {
     blocked.delete(optionId);
-    session.status = `${MATH_POSITIONS[position].label}恢复了 ${optionId}号。`;
+    session.status = `${mathPositionLabel(question, position)}恢复了 ${optionId}号。`;
   } else {
     blocked.add(optionId);
     if (!mathValidPermutations(question, session).length) {
@@ -5000,7 +5007,7 @@ function mathToggleBlock(position, optionId) {
       return;
     }
     if (session.selected[position] === optionId) session.selected[position] = null;
-    session.status = `${MATH_POSITIONS[position].label}排除了 ${optionId}号。`;
+    session.status = `${mathPositionLabel(question, position)}排除了 ${optionId}号。`;
   }
   session.showVerdict = false;
   renderMath();
@@ -5014,7 +5021,7 @@ function mathAssignOrUndo(position) {
   if (oldId !== null) {
     session.assigned[position] = null;
     if (position === question.starSlot) session.starProbabilityAtAssignment = null;
-    session.status = `已撤销${MATH_POSITIONS[position].label}的 ${oldId}号指认。`;
+    session.status = `已撤销${mathPositionLabel(question, position)}的 ${oldId}号指认。`;
     session.showVerdict = false;
     renderMath();
     return;
@@ -5026,7 +5033,7 @@ function mathAssignOrUndo(position) {
   session.selected[position] = null;
   session.selected = session.selected.map((id) => id === optionId ? null : id);
   if (position === question.starSlot) session.starProbabilityAtAssignment = chanceBefore;
-  session.status = `${MATH_POSITIONS[position].label}指认为 ${optionId}号；同一编号已从其余空位排除。`;
+  session.status = `${mathPositionLabel(question, position)}指认为 ${optionId}号；同一编号已从其余空位排除。`;
   session.showVerdict = false;
   renderMath();
 }
